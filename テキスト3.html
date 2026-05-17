@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>資料共有ドライブ</title>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <style>
+        :root {
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --accent: #10b981; /* ドライブ・資料用としてフレッシュなグリーンを採用 */
+            --accent-hover: #059669;
+            --accent-light: #ecfdf5;
+            --border: #e2e8f0;
+            --status-color: #10b981;
+            --radius-lg: 20px;
+            --radius-md: 16px;
+            --radius-sm: 12px;
+        }
+
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Hiragino Sans", "Meiryo", sans-serif;
+            line-height: 1.6; 
+            padding: 20px; 
+            padding-top: 130px; /* リンク追加に伴いヘッダーと被らないよう上部余白を調整 */
+            max-width: 900px; 
+            margin: 0 auto; 
+            background-color: var(--bg-color); 
+            color: var(--text-main); 
+            -webkit-font-smoothing: antialiased;
+        }
+
+        #meta-info {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            text-align: right;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 8px;
+            z-index: 100;
+        }
+
+        #status { 
+            font-size: 0.75rem;
+            color: var(--status-color);
+            background: #ecfdf5;
+            padding: 6px 14px;
+            border-radius: var(--radius-lg);
+            cursor: pointer;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            box-shadow: 0 2px 5px rgba(16, 185, 129, 0.05);
+            border: 1px solid rgba(16, 185, 129, 0.1);
+            user-select: none;
+        }
+        #status::before {
+            content: "";
+            width: 8px; height: 8px;
+            background-color: var(--status-color);
+            border-radius: 50%;
+        }
+
+        #last-updated {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            margin-right: 6px;
+        }
+
+        .external-link {
+            display: inline-flex;
+            align-items: center;
+            background: #f0f7ff;
+            color: #0066ff;
+            text-decoration: none;
+            font-size: 0.75rem;
+            font-weight: bold;
+            padding: 8px 16px;
+            border-radius: var(--radius-lg);
+            border: 1px solid #d0e4ff;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 2px 5px rgba(0, 102, 255, 0.05);
+        }
+        .external-link:hover {
+            background: #0066ff;
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 10px rgba(0, 102, 255, 0.15);
+        }
+
+        /* 台本リンク用のスタイル（色味を調整して区別しやすくしています） */
+        .script-link {
+            background: #fff7ed;
+            color: #ea580c;
+            border: 1px solid #ffedd5;
+        }
+        .script-link:hover {
+            background: #ea580c;
+            color: white;
+            box-shadow: 0 4px 10px rgba(234, 88, 12, 0.15);
+        }
+
+        header {
+            margin: 20px 0 35px 0;
+            border-bottom: 3px solid var(--text-main);
+            display: inline-block;
+        }
+
+        h1 { 
+            font-size: 1.8rem; 
+            font-weight: 900; 
+            padding-bottom: 8px; 
+            margin: 0; 
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* 資料カードのスタイル一覧 */
+        #list {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+        }
+
+        .document-card { 
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 24px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .document-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.02);
+        }
+        
+        .document-header { 
+            display: flex; 
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 12px;
+            margin-bottom: 16px;
+        }
+
+        .episode-badge { 
+            font-weight: 800; 
+            font-size: 0.85rem; 
+            background: var(--accent-light);
+            color: var(--accent-hover);
+            padding: 4px 12px;
+            border-radius: var(--radius-lg);
+        }
+        
+        .document-title { 
+            font-weight: 800; 
+            font-size: 1.15rem; 
+            color: var(--text-main);
+            flex: 1;
+            margin-left: 12px;
+        }
+
+        .info-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .drive-link {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            background: var(--accent);
+            color: white;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 0.95rem;
+            padding: 12px 20px;
+            border-radius: var(--radius-sm);
+            width: 100%;
+            box-sizing: border-box;
+            transition: all 0.2s;
+            box-shadow: 0 4px 6px rgba(16, 185, 129, 0.15);
+        }
+
+        .drive-link:hover {
+            background: var(--accent-hover);
+            box-shadow: 0 6px 12px rgba(16, 185, 129, 0.25);
+        }
+
+        @media (max-width: 600px) { 
+            body { padding-top: 180px; padding-left: 15px; padding-right: 15px; }
+            #meta-info { top: 15px; right: 15px; left: 15px; flex-direction: row; justify-content: space-between; align-items: center; flex-wrap: wrap; }
+            header { margin-top: 20px; }
+            .document-header { flex-direction: column; align-items: flex-start; gap: 8px; }
+            .document-title { margin-left: 0; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="meta-info">
+    <div id="status">Connecting</div>
+    <div id="last-updated"></div>
+    <a href="https://airnote123.github.io/tokei/" target="_blank" class="external-link">
+        🕒 時計を開く
+    </a>
+    <a href="https://airnote123.github.io/data-hoso" target="_blank" class="external-link script-link">
+        📄 台本を開く
+    </a>
+</div>
+
+<header>
+    <h1>📁 放送資料共有ドライブ</h1>
+</header>
+
+<div id="list">
+    <div style="text-align: center; padding: 40px; color: var(--text-muted);">
+        資料データを読み込んでいます...
+    </div>
+</div>
+
+<script>
+(function() {
+    let currentDocumentsData = null;
+    let tapCount = 0;
+    let tapTimer = null;
+
+    const statusEl = document.getElementById("status");
+    const updatedEl = document.getElementById("last-updated");
+    const listEl = document.getElementById("list");
+
+    // Supabase 設定
+    const SUPABASE_URL = "https://qfzyrogwyjbzbblnvqzy.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_tXLLvKe_L-27OsGU-GH3Zw_176oxBqw";
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    // 5回タップで直接JSONデータをコピーする処理（パスワードを不要化）
+    statusEl.onclick = () => {
+        tapCount++;
+        clearTimeout(tapTimer);
+        tapTimer = setTimeout(() => tapCount = 0, 2000);
+        if (tapCount >= 5) { 
+            tapCount = 0;
+            if (currentDocumentsData) {
+                const el = document.createElement('textarea');
+                el.value = JSON.stringify(currentDocumentsData, null, 2);
+                document.body.appendChild(el); 
+                el.select(); 
+                document.execCommand('copy'); 
+                document.body.removeChild(el);
+                alert("パスワードなしで資料一覧のJSONをコピーしました！"); 
+            } else {
+                alert("データが同期されていないためコピーできません。");
+            }
+        }
+    };
+
+    // 描画処理
+    function render(data) {
+        if (!data || data.length === 0) {
+            listEl.innerHTML = `<div style="text-align: center; padding: 40px; color: var(--text-muted);">登録されている資料がありません。</div>`;
+            return;
+        }
+
+        // 放送回 (episode_number) の昇順（1から順）にソート
+        const sortedDocs = [...data].sort((a, b) => {
+            return (a.episode_number || 0) - (b.episode_number || 0);
+        });
+
+        // 毎回再生音リセットなどの干渉がないため、データ同一チェックをして差分がなければリターン
+        if (JSON.stringify(currentDocumentsData) === JSON.stringify(sortedDocs)) {
+            return;
+        }
+        currentDocumentsData = sortedDocs;
+
+        // 最終同期時刻の更新（一番新しいcreated_atを持つレコード、または現在時刻）
+        let latestDate = new Date();
+        if (sortedDocs.length > 0) {
+            const dates = sortedDocs.map(d => new Date(d.created_at)).filter(d => !isNaN(d));
+            if (dates.length > 0) {
+                latestDate = new Date(Math.max(...dates));
+            }
+        }
+        updatedEl.innerText = `${latestDate.getMonth()+1}/${latestDate.getDate()} ${String(latestDate.getHours()).padStart(2,'0')}:${String(latestDate.getMinutes()).padStart(2,'0')} 同期`;
+
+        listEl.innerHTML = sortedDocs.map(doc => {
+            const fileUrl = doc.url ? doc.url.trim() : "";
+            
+            return `
+                <div class="document-card">
+                    <div class="document-header">
+                        <span class="episode-badge">第 ${doc.episode_number ?? "-"} 回 放送</span>
+                        <span class="document-title">${doc.title || "タイトル未設定"}</span>
+                    </div>
+                    <div class="info-row">
+                        ${fileUrl ? `
+                            <a href="${fileUrl}" target="_blank" class="drive-link">
+                                📂 資料ファイルを開く
+                            </a>
+                        ` : `
+                            <div style="color: var(--text-muted); font-size: 0.9rem; font-style: italic;">
+                                資料URLが登録されていません
+                            </div>
+                        `}
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    // Supabaseからデータ読み込み
+    async function loadData() {
+        try {
+            // documents テーブルから全データを取得
+            const { data, error } = await supabase
+                .from("documents")
+                .select("*");
+                
+            if (!error) { 
+                render(data); 
+                statusEl.innerText = "Synced"; 
+                statusEl.style.backgroundColor = "#ecfdf5";
+                statusEl.style.color = "#10b981";
+            } else {
+                throw error;
+            }
+        } catch (err) {
+            console.error("Load Error:", err);
+            statusEl.innerText = "Error";
+            statusEl.style.backgroundColor = "#fee2e2";
+            statusEl.style.color = "#dc2626";
+        }
+    }
+
+    // 2秒おきに自動更新ポーリング
+    setInterval(loadData, 2000);
+    loadData();
+})();
+</script>
+</body>
+</html>
