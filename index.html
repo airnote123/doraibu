@@ -304,7 +304,7 @@
                 latestDate = new Date(Math.max(...dates));
             }
         }
-        updatedEl.innerText = `${latestDate.getMonth()+1}/${latestDate.getDate()} ${String(latestDate.getHours()).padStart(2,'0')}:${String(latestDate.getMinutes()).padStart(2,'0')} 更新`;
+        updatedEl.innerText = `最終更新日：${latestDate.getMonth()+1}/${latestDate.getDate()} ${String(latestDate.getHours()).padStart(2,'0')}:${String(latestDate.getMinutes()).padStart(2,'0')}`;
 
         listEl.innerHTML = sortedDocs.map(doc => {
             const fileUrl = doc.url ? doc.url.trim() : "";
