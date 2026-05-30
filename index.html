@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ドライブ</title>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <style>
+        :root {
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --accent: #10b981;
+            --accent-hover: #059669;
+            --accent-light: #ecfdf5;
+            --border: #e2e8f0;
+            --status-color: #10b981;
+            --radius-lg: 20px;
+            --radius-md: 16px;
+            --radius-sm: 12px;
+            --not-yet-bg-color: #1ee71b;
+        }
+
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Hiragino Sans", "Meiryo", sans-serif;
+            line-height: 1.6; 
+            padding: 20px; 
+            padding-top: 130px; 
+            max-width: 900px; 
+            margin: 0 auto; 
+            background-color: var(--bg-color); 
+            color: var(--text-main); 
+            -webkit-font-smoothing: antialiased;
+        }
+
+        #meta-info { position: absolute; top: 20px; right: 20px; text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; z-index: 100; }
+        #status { font-size: 0.75rem; color: var(--status-color); background: #ecfdf5; padding: 6px 14px; border-radius: var(--radius-lg); cursor: pointer; font-weight: bold; display: flex; align-items: center; gap: 6px; box-shadow: 0 2px 5px rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.1); user-select: none; }
+        #status::before { content: ""; width: 8px; height: 8px; background-color: var(--status-color); border-radius: 50%; }
+        #last-updated { font-size: 0.7rem; color: var(--text-muted); margin-right: 6px; }
+
+        .external-link { display: inline-flex; align-items: center; background: #f0f7ff; color: #0066ff; text-decoration: none; font-size: 0.75rem; font-weight: bold; padding: 8px 16px; border-radius: var(--radius-lg); border: 1px solid #d0e4ff; transition: all 0.2s; box-shadow: 0 2px 5px rgba(0, 102, 255, 0.05); }
+        .external-link:hover { background: #0066ff; color: white; transform: translateY(-2px); }
+        .script-link { background: #fff7ed; color: #ea580c; border: 1px solid #ffedd5; }
+        .script-link:hover { background: #ea580c; color: white; }
+
+        header { margin: 20px 0 35px 0; border-bottom: 3px solid var(--text-main); display: inline-block; }
+        h1 { font-size: 1.8rem; font-weight: 900; padding-bottom: 8px; margin: 0; display: flex; align-items: center; gap: 10px; }
+        #list { display: grid; grid-template-columns: 1fr; gap: 20px; }
+        .document-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 24px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); transition: transform 0.2s; }
+        .document-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 16px; }
+        .episode-badge { font-weight: 800; font-size: 0.85rem; background: var(--accent-light); color: var(--accent-hover); padding: 4px 12px; border-radius: var(--radius-lg); }
+        .document-title { font-weight: 800; font-size: 1.15rem; color: var(--text-main); flex: 1; margin-left: 12px; }
+        .info-row { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
+        .drive-link { display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: var(--accent); color: white; text-decoration: none; font-weight: bold; font-size: 0.95rem; padding: 12px 20px; border-radius: var(--radius-sm); width: 100%; box-sizing: border-box; transition: all 0.2s; }
+        .drive-link:hover { background: var(--accent-hover); }
+
+        .not-yet-text {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            font-size: 1.4rem;
+            color: #ffffff;
+            background-color: var(--not-yet-bg-color);
+            padding: 12px 20px;
+            width: 100%;
+            box-sizing: border-box;
+            border-radius: 0; /* 角を尖らせる */
+        }
+
+        @media (max-width: 600px) { 
+            body { padding-top: 180px; padding-left: 15px; padding-right: 15px; }
+            #meta-info { top: 15px; right: 15px; left: 15px; flex-direction: row; justify-content: space-between; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="meta-info">
+    <div id="status">Connecting</div>
+    <div id="last-updated"></div>
+    <a href="https://airnote123.github.io/tokei/" target="_blank" class="external-link">🕒 時計を開く</a>
+    <a href="https://airnote123.github.io/data-hoso" target="_blank" class="external-link script-link">📄 台本を開く</a>
+</div>
+
+<header>
+    <h1>📁 資料共有ドライブ</h1>
+</header>
+
+<div id="list">
+    <div style="text-align: center; padding: 40px; color: var(--text-muted);">データ読込中...</div>
+</div>
+
+<script>
+(function() {
+    let currentDocumentsData = null;
+    const statusEl = document.getElementById("status");
+    const updatedEl = document.getElementById("last-updated");
+    const listEl = document.getElementById("list");
+
+    const SUPABASE_URL = "https://qfzyrogwyjbzbblnvqzy.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_tXLLvKe_L-27OsGU-GH3Zw_176oxBqw";
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    function render(data) {
+        if (!data || data.length === 0) {
+            listEl.innerHTML = `<div style="text-align: center; padding: 40px;">登録資料がありません。</div>`;
+            return;
+        }
+
+        const sortedDocs = [...data].sort((a, b) => {
+            return (b.episode_number || 0) - (a.episode_number || 0);
+        });
+
+        if (JSON.stringify(currentDocumentsData) === JSON.stringify(sortedDocs)) return;
+        currentDocumentsData = sortedDocs;
+
+        let latestDate = new Date();
+        const dates = sortedDocs.map(d => new Date(d.created_at)).filter(d => !isNaN(d));
+        if (dates.length > 0) latestDate = new Date(Math.max(...dates));
+        updatedEl.innerText = `最終更新日：${latestDate.getMonth()+1}/${latestDate.getDate()} ${String(latestDate.getHours()).padStart(2,'0')}:${String(latestDate.getMinutes()).padStart(2,'0')}`;
+
+        listEl.innerHTML = sortedDocs.map(doc => {
+            const fileUrl = doc.url ? doc.url.trim() : "";
+            const isNotYet = (doc.is_broadcasted === false);
+
+            return `
+                <div class="document-card">
+                    <div class="document-header">
+                        <span class="episode-badge">${doc.episode_number ? `第 ${doc.episode_number} 回 放送` : "番号なし"}</span>
+                        <span class="document-title">${doc.title || "タイトル未設定"}</span>
+                    </div>
+                    <div class="info-row">
+                        ${fileUrl ? `<a href="${fileUrl}" target="_blank" class="drive-link">📂 資料ファイルを開く</a>` : `<div style="color:var(--text-muted);">URL未登録</div>`}
+                        ${isNotYet ? `<div class="not-yet-text">♪未放送♪</div>` : ""}
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    async function loadData() {
+        try {
+            const { data, error } = await supabase.from("documents").select("*");
+            if (!error) render(data);
+        } catch (err) { console.error(err); }
+    }
+
+    setInterval(loadData, 2000);
+    loadData();
+})();
+</script>
+</body>
+</html>
